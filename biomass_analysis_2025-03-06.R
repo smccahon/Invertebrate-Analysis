@@ -46,7 +46,6 @@ invert <- invert %>%
 
 # Standardize continuous variables
 invert.cs <- invert
-invert.cs$SPEI <- scale(invert.cs$SPEI)
 invert.cs$PercentAg <- scale(invert.cs$PercentAg)
 invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
 invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
@@ -55,6 +54,9 @@ invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
 invert.cs$pH <- scale(invert.cs$pH)
 invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
 invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
+invert.cs$NeonicInvert_ng.g <- scale(invert.cs$NeonicInvert_ng.g)
+invert.cs$NeonicWater_ng.L <- scale(invert.cs$NeonicWater_ng.L)
+invert.cs$PesticideInvert_ng.g <- scale(invert.cs$PesticideInvert_ng.g)
 
 # Subset spring and fall
 spring <- subset(invert.cs, Season == "Spring")
