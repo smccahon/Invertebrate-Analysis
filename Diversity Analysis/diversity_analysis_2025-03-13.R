@@ -1,7 +1,7 @@
 #------------------------------#
 #   Order Diversity Analysis   #
 #     Created 2025-03-06       #
-#    Modified 2025-03-13       #
+#    Modified 2025-03-24       #
 #------------------------------#
 
 # Load packages
@@ -9,7 +9,7 @@ library(ggplot2)
 library(dplyr)
 library(car)
 library(AICcmodavg)
-library(glmmTMB) # my data set has 14% zeros
+library(glmmTMB) 
 library(MASS)
 library(MuMIn)
 
@@ -188,3 +188,30 @@ model_names <- paste0("m", 1:9)
 models <- mget(model_names)
 model_avg <- model.avg(models)
 summary(model_avg)
+
+
+# Modeling with Poisson ####
+m1 <- glm(Diversity ~ PercentAg + Season + -1, data = invert.cs, family = poisson)
+m2 <- glm(Diversity ~ PercentBufferAroundWetland + Season, data = invert.cs, family = poisson)
+m3 <- glm(Diversity ~ PercentLocalVeg_50m + Season, data = invert.cs, family = poisson)
+m4 <- glm(Diversity ~ PercentBufferAroundWetland + Season + PercentLocalVeg_50m, 
+          data = invert.cs, family = poisson)
+m5 <- glm(Diversity ~ pH + Season, data = invert.cs, family = poisson)
+m6 <- glm(Diversity ~ TDS_mg.L + Season, data = invert.cs, family = poisson)
+m7 <- glm(Diversity ~ pH + TDS_mg.L + Season, data = invert.cs, family = poisson)
+m8 <- glm(Diversity ~ Dist_Closest_Wetland_m + Season, data = invert.cs, family = poisson)
+m9 <- glm(Diversity ~ Season, data = invert.cs, family = poisson)
+
+model_names <- paste0("m", 1:9)
+aictab(models, modnames = model_names)
+
+summary(m1)
+
+# ...model average ----
+models <- mget(model_names)
+model_avg <- model.avg(models)
+
+
+summary(model_avg)
+
+# 

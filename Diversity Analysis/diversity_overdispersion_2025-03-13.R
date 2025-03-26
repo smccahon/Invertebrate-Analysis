@@ -13,11 +13,10 @@ library(glmmTMB) # my data set has 14% zeros
 library(MASS)
 
 # Read in data
-setwd("processed")
-invert <- read.csv("Macroinverterbrate_Analysis_2025-03-06.csv")
+invert <- read.csv("processed/Macroinverterbrate_Analysis_2025-03-06.csv")
 
 # Data Distribution
- hist(invert$Diversity, breaks = 20) # left  skewed distribution
+hist(invert$Diversity, breaks = 20) # left  skewed distribution
  
  # Data Exploration ####
  ## Ag & Diversity ####

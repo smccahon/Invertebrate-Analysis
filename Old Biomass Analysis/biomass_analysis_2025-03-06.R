@@ -1278,7 +1278,7 @@ ggplot(d, aes(x = PercentAg, y = predicted_Mass, col = Season)) +
                                  col = Season), size = 2)
 
 ## DISTANCE TO WETLAND & VEG MODEL ####
-m <- lm(LogBiomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + Season, data = invert)
+m <- lm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + Season, data = invert)
 
 d <- expand.grid(PercentLocalVeg_50m = seq(min(invert$PercentLocalVeg_50m), 
                                  max(invert$PercentLocalVeg_50m), 
