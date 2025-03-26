@@ -14,8 +14,9 @@ library(ggbreak)
 library(patchwork)
 library(car)
 library(data.table)
+library(viridis)
 
-invert <- read.csv("Macroinverterbrate_Analysis_2025-03-06.csv")
+invert <- read.csv("../data/Macroinverterbrate_Analysis_2025-03-06.csv")
 
 # ...transform variables ----
 
@@ -50,7 +51,6 @@ invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
 invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
 
 # ...correlations and covariate selection ----
-### High Correlations ####
 # code from biomass_analysis_2025-03-06
 
 # Season and permanence (-0.63)
@@ -78,7 +78,7 @@ m4 <- cpglm(Biomass ~ DominantCrop + Season, link = "log",
 models <- list(m1, m2, m3, m4)
 model.sel(models)
 
-# PercentAg is the best predictor
+# PercentAg is the best predictor with and without outliers
 
 # Vegetation
 m1 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log", 
@@ -86,7 +86,7 @@ m1 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log",
 m2 <- cpglm(Biomass ~ PercentBufferAroundWetland + Season, link = "log", 
             data = invert.cs)
 
-# Maximum buffer width is the best predictor
+# Maximum buffer width is the best predictor with and without outliers
 
 ### ...AIC
 models <- list(m1, m2)
@@ -115,6 +115,8 @@ r2 <- qnorm(u)
 plot(r2 ~ fitted(m1), cex = 0.5)
 qqnorm(r2, cex = 0.5)
 par(parold)
+
+
 
 # ...model comparison ----
 invert.cs$Season <- relevel(invert.cs$Season, ref = "Spring")
@@ -192,7 +194,7 @@ d$lower_CI <- exp(d$lower_CI_log)
 d$upper_CI <- exp(d$upper_CI_log)
 
 # Plot predictions with confidence intervals
-# THESIS PLOT ----
+# Biomass ~ Ag + Season Plot ----
 ggplot(d, aes(x = PercentAg, y = yhat, col = Season)) +  
   geom_line(size = 1) +  
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = Season), 
@@ -265,7 +267,7 @@ df <- 77-3
 p_value <- 1 - pchisq(27.29, df)
 p_value # 0.99
 
-# Plot residuals vs fitted values
+# Plot residuals vs fitted values ----
 # generally uniform around 0
 plot(fitted(m1), residuals(m1), main = "Residuals vs Fitted Values", xlab = "Fitted values", ylab = "Residuals")
 abline(h = 0, col = "red")
@@ -334,24 +336,33 @@ ggplot(data = ci, aes(x = coefficient, y = estimate)) +
                               "(Intercept)" = "Season (Spring)")) +
   scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
 
+# ...influence of outliers ----
+m <- cpglm(Biomass ~ PercentAg + Season, link = "log", data = invert)
+
+
+
 # Wetland permanence ----
-# Compare to the informed null and top model ####
+# Compare to other models ####
 m1 <- cpglm(Biomass ~ Permanence, link = "log", data = invert.cs)
 m2 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
 m3 <- cpglm(Biomass ~ PercentAg + Season, link = "log", data= invert.cs)
-m4 <- cpglm(Biomass ~ 1, link = "log", data = invert.cs)
+m4 <- cpglm(Biomass ~ PercentAg + Permanence, link = "log", data = invert.cs)
+m5 <- cpglm(Biomass ~ 1, link = "log", data = invert.cs)
+  
 # AIC MODEL SELECTION
 models <- list(m1, m2, m3, m4)
 model.sel(models)
 
-# top model still significantly best
 deviance(m1)
 deviance(m2)
+deviance(m3)
+deviance(m4)
 
 summary(m1)
 ci <- trtools::lincon(m1, fcov=vcov)
 # Wetland permanence performs significantly better than informed null
 # Significant difference in biomass between temporary and permanent wetlands
+# Surrounding Ag + Season performs significantly better than wetland permanence
 
 # plot parameter estimates and graph
 ci <- trtools::lincon(m1, fcov=vcov)
@@ -380,5 +391,280 @@ ggplot(data = ci, aes(x = coefficient, y = estimate)) +
                               "PermanenceSeasonal" = "Seasonal",
                               "(Intercept)" = "Temporary")) +
   scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+# Plot permanence univariate model ----
+m1 <- cpglm(Biomass ~ Permanence, link = "log", data = invert)
+
+# create data frame
+d <- expand.grid(Permanence = unique(invert$Permanence))
+
+ci <- trtools::lincon(m1, fcov=vcov)
+
+### ...add confidence intervals ----
+
+# Generate predictions on the log scale using type = "link"
+d$yhat_log <- predict(m1, newdata = d, type = "link")
+
+# Extract the covariance matrix from the model
+vcov_matrix <- vcov(m1)
+
+# Create the design matrix for the new data
+X <- model.matrix(~ Permanence, data = d)
+
+# Calculate the variance for each prediction (on the log scale)
+pred_var <- diag(X %*% vcov_matrix %*% t(X))
+
+# Calculate standard errors on the log scale
+pred_se_log <- sqrt(pred_var)
+
+# Calculate the 95% confidence intervals on the log scale
+d$lower_CI_log <- d$yhat_log - 1.96 * pred_se_log
+d$upper_CI_log <- d$yhat_log + 1.96 * pred_se_log
+
+# Exponentiate the predictions and confidence intervals to get them 
+# on the original scale
+d$yhat <- exp(d$yhat_log)
+d$lower_CI <- exp(d$lower_CI_log)
+d$upper_CI <- exp(d$upper_CI_log)
+
+# Plot predictions with confidence intervals
+# Biomass ~ Ag + Season Plot ----
+ggplot(d, aes(x = Permanence, y = yhat)) +  
+  geom_point(data = invert, aes(x = Permanence, y = Biomass, col = Permanence),
+             size = 3)+
+  geom_point(size = 4, col = "black") +  
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.1,
+                col = "black",
+                size = 1) +
+  theme_classic() +
+  labs(x = "Wetland Permanence", 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 20, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 20, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.position = "none") +
+  scale_y_break(c(0.65,1.40), scales =0.25, 
+                ticklabels = c(1.50, 3.00),
+                space = 0.5) +
+  scale_color_viridis_d(begin = 0.2, end = 0.95)
+  
+# remove outliers and rerun analysis ----
+invert <- subset(invert, Biomass < 1.4)
+invert.cs <- invert
+invert.cs$PercentAg <- scale(invert.cs$PercentAg)
+invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
+invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
+invert.cs$MaxBufferWidth_m <- scale(invert.cs$MaxBufferWidth_m)
+invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
+invert.cs$pH <- scale(invert.cs$pH)
+invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
+invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
+
+invert.cs$Season <- relevel(invert.cs$Season, ref = "Spring")
+m1 <- cpglm(Biomass ~ PercentAg + Season, link = "log", data = invert.cs)
+m2 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m3 <- cpglm(Biomass ~ PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m4 <- cpglm(Biomass ~ PercentLocalVeg_50m + Season + 
+              MaxBufferWidth_m, 
+            link = "log", 
+            data = invert.cs)
+m5 <- cpglm(Biomass ~ pH + Season, link = "log", data = invert.cs)
+m6 <- cpglm(Biomass ~ TDS_mg.L + Season, link = "log", data = invert.cs)
+m7 <- cpglm(Biomass ~ pH + TDS_mg.L + Season, link = "log", data = invert.cs)
+m8 <- cpglm(Biomass ~ Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+m9 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
+
+# ...AIC ----
+models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9)
+model_comparison <- model.sel(models)
+print(model_comparison)
+
+# ...deviance ----
+deviance(m1)
+deviance(m2)
+deviance(m3)
+deviance(m4)
+deviance(m5)
+deviance(m6)
+deviance(m7)
+deviance(m8)
+deviance(m9)
+
+# ...plot parameter estimates from 4 top models ----
+ci1 <- trtools::lincon(m1, fcov=vcov)
+ci1 <- as.data.frame(ci1)
+ci1$coefficient <- rownames(ci1)
+
+ci3 <- trtools::lincon(m3, fcov=vcov)
+ci3 <- as.data.frame(ci3)
+ci3$coefficient <- rownames(ci3)
+
+ci4 <- trtools::lincon(m4, fcov=vcov)
+ci4 <- as.data.frame(ci4)
+ci4$coefficient <- rownames(ci4)
+
+ci8 <- trtools::lincon(m8, fcov=vcov)
+ci8 <- as.data.frame(ci8)
+ci8$coefficient <- rownames(ci8)
+
+p1 <- ggplot(data = ci1, aes(x = coefficient, y = estimate)) +
+  geom_hline(yintercept = 0, color = "darkgrey", linetype = "dashed", 
+             lwd = 1.5) +  # Horizontal line at y=0
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "black", width = 0, 
+                lwd = 1.5) +  # Confidence intervals as error bars
+  coord_flip() +  # Flip axes to make the plot horizontal
+  geom_point(size = 3) +  # Plot the point estimates
+  theme_classic() +  # Clean theme
+  labs(y = "Parameter Estimate", x = NULL) +
+  theme(axis.title.x = element_text(size = 18, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 18, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14)) +
+  scale_x_discrete(limits = c("PercentAg","SeasonFall","(Intercept)"),
+                   labels = c("PercentAg" = "% Surrounding Ag", 
+                              "SeasonFall" = "Season (Fall)",
+                              "(Intercept)" = "Season (Spring)")) +
+  scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+
+p3 <- ggplot(data = ci3, aes(x = coefficient, y = estimate)) +
+  geom_hline(yintercept = 0, color = "darkgrey", linetype = "dashed", 
+             lwd = 1.5) +  # Horizontal line at y=0
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "black", width = 0, 
+                lwd = 1.5) +  # Confidence intervals as error bars
+  coord_flip() +  # Flip axes to make the plot horizontal
+  geom_point(size = 3) +  # Plot the point estimates
+  theme_classic() +  # Clean theme
+  labs(y = "Parameter Estimate", x = NULL) +
+  theme(axis.title.x = element_text(size = 18, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 18, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14)) +
+  scale_x_discrete(limits = c("PercentLocalVeg_50m","SeasonFall","(Intercept)"),
+                   labels = c("PercentLocalVeg_50m" = "Local Vegetation Cover", 
+                              "SeasonFall" = "Season (Fall)",
+                              "(Intercept)" = "Season (Spring)")) +
+  scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+p4 <- ggplot(data = ci4, aes(x = coefficient, y = estimate)) +
+  geom_hline(yintercept = 0, color = "darkgrey", linetype = "dashed", 
+             lwd = 1.5) +  # Horizontal line at y=0
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "black", width = 0, 
+                lwd = 1.5) +  # Confidence intervals as error bars
+  coord_flip() +  # Flip axes to make the plot horizontal
+  geom_point(size = 3) +  # Plot the point estimates
+  theme_classic() +  # Clean theme
+  labs(y = "Parameter Estimate", x = NULL) +
+  theme(axis.title.x = element_text(size = 18, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 18, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14)) +
+  scale_x_discrete(limits = c("PercentLocalVeg_50m","MaxBufferWidth_m","SeasonFall","(Intercept)"),
+                   labels = c("PercentLocalVeg_50m" = "Local Vegetation Cover",
+                              "MaxBufferWidth_m" = "Maximum Buffer Cover",
+                              "SeasonFall" = "Season (Fall)",
+                              "(Intercept)" = "Season (Spring)")) +
+  scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+p8 <- ggplot(data = ci8, aes(x = coefficient, y = estimate)) +
+  geom_hline(yintercept = 0, color = "darkgrey", linetype = "dashed", 
+             lwd = 1.5) +  # Horizontal line at y=0
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "black", width = 0, 
+                lwd = 1.5) +  # Confidence intervals as error bars
+  coord_flip() +  # Flip axes to make the plot horizontal
+  geom_point(size = 3) +  # Plot the point estimates
+  theme_classic() +  # Clean theme
+  labs(y = "Parameter Estimate", x = NULL) +
+  theme(axis.title.x = element_text(size = 18, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 18, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14)) +
+  scale_x_discrete(limits = c("Dist_Closest_Wetland_m","SeasonFall","(Intercept)"),
+                   labels = c("Dist_Closest_Wetland_m" = "Dist. to Closest Wetland",
+                              "MaxBufferWidth_m" = "Maximum Buffer Cover",
+                              "SeasonFall" = "Season (Fall)",
+                              "(Intercept)" = "Season (Spring)")) +
+  scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+p3 + p4 + p1 + p8
+
+# ...is permanence still important without outliers? ----
+m1 <- cpglm(Biomass ~ Permanence, link = "log", data = invert)
+summary(m1)
+
+# Compare to other models ####
+m1 <- cpglm(Biomass ~ Permanence, link = "log", data = invert.cs)
+m2 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
+m3 <- cpglm(Biomass ~ PercentAg + Season, link = "log", data= invert.cs)
+m4 <- cpglm(Biomass ~ PercentAg + Permanence, link = "log", data = invert.cs)
+m5 <- cpglm(Biomass ~ 1, link = "log", data = invert.cs)
+
+# AIC MODEL SELECTION
+models <- list(m1, m2)
+model.sel(models)
+
+deviance(m1)
+deviance(m2)
+deviance(m3)
+deviance(m4)
+
+summary(m1)
+ci <- trtools::lincon(m1, fcov=vcov)
+# Wetland permanence performs significantly better than informed null
+# Significant difference in biomass between temporary and permanent wetlands
+# Surrounding Ag + Season performs significantly better than wetland permanence
+
+# plot parameter estimates and graph
+ci <- trtools::lincon(m1, fcov=vcov)
+ci <- as.data.frame(ci)
+ci$coefficient <- rownames(ci)
+ggplot(data = ci, aes(x = coefficient, y = estimate)) +
+  geom_hline(yintercept = 0, color = "darkgrey", linetype = "dashed", 
+             lwd = 1.5) +  # Horizontal line at y=0
+  geom_errorbar(aes(ymin = lower, ymax = upper), color = "black", width = 0, 
+                lwd = 1.5) +  # Confidence intervals as error bars
+  coord_flip() +  # Flip axes to make the plot horizontal
+  geom_point(size = 3) +  # Plot the point estimates
+  theme_classic() +  # Clean theme
+  labs(y = "Parameter Estimate", x = "Wetland Permanence") +
+  theme(axis.title.x = element_text(size = 21, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 15),
+        legend.position = c(0.9, 0.9)) +
+  scale_x_discrete(limits = c("PermanencePermanent","PermanenceSemipermanent",
+                              "PermanenceSeasonal", "(Intercept)"),
+                   labels = c("PermanencePermanent" = "Permanent",
+                              "PermanenceSemipermanent" = "Semipermanent", 
+                              "PermanenceSeasonal" = "Seasonal",
+                              "(Intercept)" = "Temporary")) +
+  scale_y_continuous(breaks = c(-4,-3,-2,-1,0,1,2,3))
+
+# ...outliers change inference...what should I do? ----
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
