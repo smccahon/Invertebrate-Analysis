@@ -1,7 +1,7 @@
 #------------------------------#
 #    Invert Biomass Analysis   #
 #     Created 2025-03-24       #
-#    Modified 2025-03-25       #
+#    Modified 2025-03-27       #
 #------------------------------#
 
 # Load packages & data ----
@@ -44,7 +44,6 @@ invert.cs <- invert
 invert.cs$PercentAg <- scale(invert.cs$PercentAg)
 invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
 invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
-invert.cs$MaxBufferWidth_m <- scale(invert.cs$MaxBufferWidth_m)
 invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
 invert.cs$pH <- scale(invert.cs$pH)
 invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
@@ -58,7 +57,6 @@ invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
 # agricultural category and percent agriculture (0.89)
 # Dominant crop and percent agriculture (0.63)
 # agricultural category and nearest crop distance (-0.66)
-# max buffer width and percent buffer (0.77)
 # permanence and percent buffer (0.668)
 
 ### KATIE: If two variables are highly correlated, use AIC to tell you which one is better
@@ -79,18 +77,6 @@ models <- list(m1, m2, m3, m4)
 model.sel(models)
 
 # PercentAg is the best predictor with and without outliers
-
-# Vegetation
-m1 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log", 
-            data = invert.cs)
-m2 <- cpglm(Biomass ~ PercentBufferAroundWetland + Season, link = "log", 
-            data = invert.cs)
-
-# Maximum buffer width is the best predictor with and without outliers
-
-### ...AIC
-models <- list(m1, m2)
-model.sel(models)
 
 # Compound Poisson-gamma model ----
 m1 <- cpglm(Biomass ~ PercentAg + Season, link = "log", 
@@ -478,10 +464,18 @@ m8 <- cpglm(Biomass ~ Dist_Closest_Wetland_m + Season, link = "log",
             data = invert.cs)
 m9 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
 
+m10 <- cpglm(Biomass ~ PercentAg + MaxBufferWidth_m + PercentLocalVeg_50m +
+              pH + TDS_mg.L + Dist_Closest_Wetland_m + Season, data = invert.cs,
+             link = "log")
+
 # ...AIC ----
-models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9)
+models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
 model_comparison <- model.sel(models)
 print(model_comparison)
+
+trtools::lincon(m7, fcov=vcov)
+
+
 
 # ...deviance ----
 deviance(m1)
@@ -493,6 +487,7 @@ deviance(m6)
 deviance(m7)
 deviance(m8)
 deviance(m9)
+deviance(m10)
 
 # ...plot parameter estimates from 4 top models ----
 ci1 <- trtools::lincon(m1, fcov=vcov)
@@ -649,22 +644,401 @@ ggplot(data = ci, aes(x = coefficient, y = estimate)) +
 # ...outliers change inference...what should I do? ----
 
 
+# models with informative parameters: stage 2 ----
+invert <- subset(invert, Biomass < 1.4)
+invert.cs <- invert
+invert.cs$PercentAg <- scale(invert.cs$PercentAg)
+invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
+invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
+invert.cs$MaxBufferWidth_m <- scale(invert.cs$MaxBufferWidth_m)
+invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
+invert.cs$pH <- scale(invert.cs$pH)
+invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
+invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
+
+invert.cs$Season <- relevel(invert.cs$Season, ref = "Spring")
+
+# model selection
+m1 <- cpglm(Biomass ~ PercentAg + Season, link = "log", data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m3 <- cpglm(Biomass ~ Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+m4 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log", 
+                  data = invert.cs)
+m5 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
+
+# two-way additive combinations
+m6 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m7 <- cpglm(Biomass ~ PercentAg + Dist_Closest_Wetland_m + Season, link = "log", 
+          data = invert.cs)
+m8 <- cpglm(Biomass ~ PercentAg + MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m9 <- cpglm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + Season, 
+            link = "log", data = invert.cs)
+m10 <- cpglm(Biomass ~ PercentLocalVeg_50m + MaxBufferWidth_m + Season, 
+            link = "log", data = invert.cs)
+m11 <- cpglm(Biomass ~ Dist_Closest_Wetland_m + MaxBufferWidth_m + Season, 
+            link = "log", data = invert.cs)
+
+# three-way additive combinations
+m12 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + 
+               Dist_Closest_Wetland_m + Season, link = "log", data = invert.cs)
+m13 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + 
+               MaxBufferWidth_m + Season, link = "log", data = invert.cs)
+m14 <- cpglm(Biomass ~ PercentAg + Dist_Closest_Wetland_m + 
+               MaxBufferWidth_m + Season, link = "log", data = invert.cs)
+m15 <- cpglm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + 
+               MaxBufferWidth_m + Season, link = "log", data = invert.cs)
+
+# four-way additive combinations
+m16 <- cpglm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + 
+               MaxBufferWidth_m + PercentAg + Season, link = "log", 
+             data = invert.cs)
+
+
+# does model performance improve with interactions? 
+# ag + local veg
+m1 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentAg * PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models) # model without interaction is better with and without outliers
+
+# ag + buffer
+m1 <- cpglm(Biomass ~ PercentAg + MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentAg * MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models) # model without interaction is better with and without outliers
+
+# local veg + buffer
+m1 <- cpglm(Biomass ~ PercentLocalVeg_50m + MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentLocalVeg_50m * MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models) # model with interaction is better with outliers
+                  # model without interaction is better without outliers
+
+# dist to wetland + ag
+m1 <- cpglm(Biomass ~ PercentAg + Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentAg * Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models) # model without interaction is better with and without outliers
+
+# dist to wetland + local veg
+m1 <- cpglm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + Season, 
+            link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentLocalVeg_50m * Dist_Closest_Wetland_m + Season, 
+            link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models)  # model without interaction is better with and without outliers
+
+# dist to wetland + buffer
+m1 <- cpglm(Biomass ~ MaxBufferWidth_m + Dist_Closest_Wetland_m + Season, 
+            link = "log", 
+            data = invert.cs)
+m2 <- cpglm(Biomass ~ MaxBufferWidth_m * Dist_Closest_Wetland_m + Season, 
+            link = "log", 
+            data = invert.cs)
+
+models <- list(m1, m2)
+model.sel(models) # model with interaction is better with outliers
+                  # model without interaction is better without outliers
 
 
 
+# compare informative parameters with relevant interactions
 
+m1 <- cpglm(Biomass ~ PercentAg + Season, link = "log", data = invert.cs)
+m2 <- cpglm(Biomass ~ PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m3 <- cpglm(Biomass ~ Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+m4 <- cpglm(Biomass ~ MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m5 <- cpglm(Biomass ~ Season, link = "log", data = invert.cs)
 
+# two-way additive combinations
+m6 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + Season, link = "log", 
+            data = invert.cs)
+m7 <- cpglm(Biomass ~ PercentAg + Dist_Closest_Wetland_m + Season, link = "log", 
+            data = invert.cs)
+m8 <- cpglm(Biomass ~ PercentAg + MaxBufferWidth_m + Season, link = "log", 
+            data = invert.cs)
+m9 <- cpglm(Biomass ~ PercentLocalVeg_50m + Dist_Closest_Wetland_m + Season, 
+            link = "log", data = invert.cs)
+m10 <- cpglm(Biomass ~ PercentLocalVeg_50m * MaxBufferWidth_m + Season, 
+             link = "log", data = invert.cs)
+m11 <- cpglm(Biomass ~ Dist_Closest_Wetland_m * MaxBufferWidth_m + Season, 
+             link = "log", data = invert.cs)
 
+# three-way additive combinations
+m12 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m + 
+               Dist_Closest_Wetland_m + Season, link = "log", data = invert.cs)
+m13 <- cpglm(Biomass ~ PercentAg + PercentLocalVeg_50m * MaxBufferWidth_m +
+               Season, link = "log", data = invert.cs)
+m14 <- cpglm(Biomass ~ PercentAg + Dist_Closest_Wetland_m * MaxBufferWidth_m + 
+               Season, link = "log", data = invert.cs)
 
+# four-way additive combinations
+m15 <- cpglm(Biomass ~ PercentLocalVeg_50m * MaxBufferWidth_m + 
+               Dist_Closest_Wetland_m * MaxBufferWidth_m + PercentAg + 
+               Season, link = "log", 
+             data = invert.cs)
 
+# ...AIC ----
+models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, 
+               m14, m15)
 
+model_comparison <- model.sel(models)
+print(model_comparison)
 
+trtools::lincon(m8, fcov=vcov)
+trtools::lincon(m14, fcov=vcov)
+trtools::lincon(m13, fcov=vcov)
+trtools::lincon(m1, fcov=vcov)
+trtools::lincon(m15, fcov=vcov)
+trtools::lincon(m7, fcov=vcov)
+trtools::lincon(m6, fcov=vcov)
+trtools::lincon(m12, fcov=vcov)
+trtools::lincon(m11, fcov=vcov)
+trtools::lincon(m10, fcov=vcov)
+trtools::lincon(m5, fcov=vcov)
+trtools::lincon(m4, fcov=vcov)
+trtools::lincon(m2, fcov=vcov)
+trtools::lincon(m3, fcov=vcov)
+trtools::lincon(m9, fcov=vcov)
 
+# Biomass ~ Local Veg + Season -------------------------------------------------
+# outliers removed
+ invert <- subset(invert, Biomass < 1.4)
+# invert.cs <- invert
+# invert.cs$PercentAg <- scale(invert.cs$PercentAg)
+# invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
+# invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
+# invert.cs$MaxBufferWidth_m <- scale(invert.cs$MaxBufferWidth_m)
+# invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
+# invert.cs$pH <- scale(invert.cs$pH)
+# invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
+# invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
+# 
+# invert.cs$Season <- relevel(invert.cs$Season, ref = "Spring")
+m1 <- cpglm(Biomass ~ PercentLocalVeg_50m + Season, link = "log", data = invert)
 
+# create data frame
+d <- expand.grid(PercentLocalVeg_50m = seq(min(invert$PercentLocalVeg_50m), 
+                                 max(invert$PercentLocalVeg_50m), 
+                                 length.out = 1000),
+                 Season = unique(invert$Season))
 
+ci <- trtools::lincon(m1, fcov=vcov)
 
+### ...add confidence intervals ----
 
+# Generate predictions on the log scale using type = "link"
+d$yhat_log <- predict(m1, newdata = d, type = "link")
 
+# Extract the covariance matrix from the model
+vcov_matrix <- vcov(m1)
 
+# Create the design matrix for the new data
+X <- model.matrix(~ PercentLocalVeg_50m + Season, data = d)
 
+# Calculate the variance for each prediction (on the log scale)
+pred_var <- diag(X %*% vcov_matrix %*% t(X))
+
+# Calculate standard errors on the log scale
+pred_se_log <- sqrt(pred_var)
+
+# Calculate the 95% confidence intervals on the log scale
+d$lower_CI_log <- d$yhat_log - 1.96 * pred_se_log
+d$upper_CI_log <- d$yhat_log + 1.96 * pred_se_log
+
+# Exponentiate the predictions and confidence intervals to get them 
+# on the original scale
+d$yhat <- exp(d$yhat_log)
+d$lower_CI <- exp(d$lower_CI_log)
+d$upper_CI <- exp(d$upper_CI_log)
+
+# Plot predictions with confidence intervals
+# Biomass ~ Ag + Season Plot ----
+ggplot(d, aes(x = PercentLocalVeg_50m, y = yhat, col = Season)) +  
+  geom_line(size = 1) +  
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = Season), 
+              alpha = 0.2, color = NA) + 
+  theme_classic() +
+  labs(x = "% Local Vegetation Cover", 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 21, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18),
+        legend.position = "top") +
+  scale_color_manual(values = c("Spring" = "skyblue3", 
+                                "Fall" = "darkorange3")) +
+  scale_fill_manual(values = c("Spring" = "skyblue3", 
+                               "Fall" = "darkorange3")) +
+  geom_point(data = invert, aes(x = PercentLocalVeg_50m, y = Biomass),
+             size = 1.5) +
+  scale_y_break(c(1.00,1.40), scales =0.25, 
+                ticklabels = c(1.50, 3.00),
+                space = 0.5)
+
+# Biomass ~ PercentAg + Max Buffer Width + Season ------------------------------
+# outliers removed
+
+m1 <- cpglm(Biomass ~ PercentAg + MaxBufferWidth_m + Season, 
+            link = "log", data = invert)
+
+# create data frame
+d <- expand.grid(MaxBufferWidth_m = seq(min(invert$MaxBufferWidth_m), 
+                                           max(invert$MaxBufferWidth_m), 
+                                           length.out = 1000),
+                 PercentAg = mean(invert$PercentAg),
+                 Season = unique(invert$Season))
+
+ci <- trtools::lincon(m1, fcov=vcov)
+
+### ...add confidence intervals ----
+
+# Generate predictions on the log scale using type = "link"
+d$yhat_log <- predict(m1, newdata = d, type = "link")
+
+# Extract the covariance matrix from the model
+vcov_matrix <- vcov(m1)
+
+# Create the design matrix for the new data
+X <- model.matrix(~ PercentAg + MaxBufferWidth_m + Season, data = d)
+
+# Calculate the variance for each prediction (on the log scale)
+pred_var <- diag(X %*% vcov_matrix %*% t(X))
+
+# Calculate standard errors on the log scale
+pred_se_log <- sqrt(pred_var)
+
+# Calculate the 95% confidence intervals on the log scale
+d$lower_CI_log <- d$yhat_log - 1.96 * pred_se_log
+d$upper_CI_log <- d$yhat_log + 1.96 * pred_se_log
+
+# Exponentiate the predictions and confidence intervals to get them 
+# on the original scale
+d$yhat <- exp(d$yhat_log)
+d$lower_CI <- exp(d$lower_CI_log)
+d$upper_CI <- exp(d$upper_CI_log)
+
+# Plot predictions with confidence intervals
+# Biomass ~ Ag + Season Plot ----
+ggplot(d, aes(x = MaxBufferWidth_m, y = yhat, col = Season)) +  
+  geom_line(size = 1) +  
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = Season), 
+              alpha = 0.2, color = NA) + 
+  theme_classic() +
+  labs(x = "Maximum Buffer Width (m)", 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 21, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18),
+        legend.position = "top") +
+  scale_color_manual(values = c("Spring" = "skyblue3", 
+                                "Fall" = "darkorange3")) +
+  scale_fill_manual(values = c("Spring" = "skyblue3", 
+                               "Fall" = "darkorange3")) +
+  geom_point(data = invert, aes(x = MaxBufferWidth_m, y = Biomass),
+             size = 1.5) +
+  scale_y_break(c(1.60,2.00), scales =0.10, 
+                ticklabels = c(1.75, 3.00),
+                space = 0.5)
+
+summary(m1)
+
+# Biomass ~ PercentAg + LocalVeg + Dist to Wetland + MaxBufferWidth + Season----
+# outliers removed
+invert <- subset(invert, Biomass < 1.4)
+
+# invert.cs$Season <- relevel(invert.cs$Season, ref = "Spring")
+m1 <- cpglm(Biomass ~ PercentLocalVeg_50m + PercentAg +
+            Dist_Closest_Wetland_m + MaxBufferWidth_m + Season, 
+            link = "log", data = invert)
+
+# create data frame
+d <- expand.grid(PercentAg = seq(min(invert$PercentAg), 
+                                           max(invert$PercentAg), 
+                                           length.out = 1000),
+                 MaxBufferWidth_m = mean(invert$MaxBufferWidth_m),
+                 PercentLocalVeg_50m = mean(invert$PercentLocalVeg_50m),
+                 Dist_Closest_Wetland_m = mean(invert$Dist_Closest_Wetland_m),
+                 Season = unique(invert$Season))
+
+ci <- trtools::lincon(m1, fcov=vcov)
+
+### ...add confidence intervals ----
+
+# Generate predictions on the log scale using type = "link"
+d$yhat_log <- predict(m1, newdata = d, type = "link")
+
+# Extract the covariance matrix from the model
+vcov_matrix <- vcov(m1)
+
+# Create the design matrix for the new data
+X <- model.matrix(~ PercentLocalVeg_50m + PercentAg +
+                    Dist_Closest_Wetland_m + MaxBufferWidth_m + Season, 
+                  data = d)
+
+# Calculate the variance for each prediction (on the log scale)
+pred_var <- diag(X %*% vcov_matrix %*% t(X))
+
+# Calculate standard errors on the log scale
+pred_se_log <- sqrt(pred_var)
+
+# Calculate the 95% confidence intervals on the log scale
+d$lower_CI_log <- d$yhat_log - 1.96 * pred_se_log
+d$upper_CI_log <- d$yhat_log + 1.96 * pred_se_log
+
+# Exponentiate the predictions and confidence intervals to get them 
+# on the original scale
+d$yhat <- exp(d$yhat_log)
+d$lower_CI <- exp(d$lower_CI_log)
+d$upper_CI <- exp(d$upper_CI_log)
+
+# Plot predictions with confidence intervals
+# Biomass ~ Ag + Season Plot ----
+ggplot(d, aes(x = PercentAg, y = yhat, col = Season)) +  
+  geom_line(size = 1) +  
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = Season), 
+              alpha = 0.2, color = NA) + 
+  theme_classic() +
+  labs(x = "% Surrounding Agriculture within 500 m", 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 21, margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21, margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18),
+        legend.position = "top") +
+  scale_color_manual(values = c("Spring" = "skyblue3", 
+                                "Fall" = "darkorange3")) +
+  scale_fill_manual(values = c("Spring" = "skyblue3", 
+                               "Fall" = "darkorange3")) +
+  geom_point(data = invert, aes(x = PercentAg, y = Biomass),
+             size = 1.5)
 

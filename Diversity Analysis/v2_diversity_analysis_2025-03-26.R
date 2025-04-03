@@ -15,10 +15,12 @@ library(MuMIn)
 library(pscl)
 
 # read in data
-invert <- read.csv("../data/Macroinverterbrate_Analysis_2025-03-06.csv")
+invert <- read.csv("../data/Macroinverterbrate_Analysis_2025-04-02.csv")
 
 # transform data
 invert$Season <- factor(invert$Season, levels = c("Spring", "Fall"))
+
+invert$Buffered <- factor(invert$Buffered, levels = c("Y", "N"))
 
 invert$Permanence <- factor(invert$Permanence, 
                             levels = c("Temporary", "Seasonal",
@@ -42,23 +44,21 @@ invert <- invert %>%
 invert.cs <- invert
 invert.cs$PercentAg <- scale(invert.cs$PercentAg)
 invert.cs$NearestCropDistance_m <- scale(invert.cs$NearestCropDistance_m)
-invert.cs$PercentBufferAroundWetland <- scale(invert.cs$PercentBufferAroundWetland)
-invert.cs$MaxBufferWidth_m <- scale(invert.cs$MaxBufferWidth_m)
 invert.cs$PercentLocalVeg_50m <- scale(invert.cs$PercentLocalVeg_50m)
 invert.cs$pH <- scale(invert.cs$pH)
 invert.cs$TDS_mg.L <- scale(invert.cs$TDS_mg.L)
 invert.cs$Dist_Closest_Wetland_m <- scale(invert.cs$Dist_Closest_Wetland_m)
 
 # ...correlations and covariate selection ----
-# code from biomass_analysis_2025-03-06
-
 # Season and permanence (-0.63)
 # Distance to nearest crop and percent agriculture (-0.72)
 # agricultural category and percent agriculture (0.89)
 # Dominant crop and percent agriculture (0.63)
 # agricultural category and nearest crop distance (-0.66)
-# max buffer width and percent buffer (0.77)
-# permanence and percent buffer (0.668)
+# buffered and percent agriculture (0.75)
+# buffered and nearest crop distance (-0.73)
+# buffered and ag category (0.70)
+
 
 # Agriculture
 m1 <- glm(Diversity ~ PercentAg + Season, family = "poisson", data = invert.cs)
@@ -73,32 +73,29 @@ models <- list(m1, m2, m3, m4)
 model.sel(models)
 
 # PercentAg is the best predictor
+m1 <- glm(Diversity ~ PercentAg + Season, family = "poisson", data = invert.cs)
+m2 <- glm(Diversity ~ Buffered + Season, family = "poisson", data = invert.cs)
 
-# Vegetation
-m1 <- glm(Diversity ~ MaxBufferWidth_m + Season, family = "poisson", 
-            data = invert.cs)
-m2 <- glm(Diversity ~ PercentBufferAroundWetland + Season, family = "poisson",
-            data = invert.cs)
-
-### ...AIC
 models <- list(m1, m2)
 model.sel(models)
 
-# Maximum buffer width is the best predictor
+# if in the same model, percent ag is better
 
 # ...model selection ----
 m1 <- glm(Diversity ~ PercentAg + Season, data = invert.cs, family = "poisson")
-m2 <- glm(Diversity ~ MaxBufferWidth_m + Season, data = invert.cs, family = "poisson")
+m2 <- glm(Diversity ~ Buffered + Season, data = invert.cs, family = "poisson")
 m3 <- glm(Diversity ~ PercentLocalVeg_50m + Season, data = invert.cs, family = "poisson")
-m4 <- glm(Diversity ~ MaxBufferWidth_m + Season + PercentLocalVeg_50m, 
+m4 <- glm(Diversity ~ Buffered + Season + PercentLocalVeg_50m, 
           data = invert.cs, family = "poisson")
 m5 <- glm(Diversity ~ pH + Season, data = invert.cs, family = "poisson")
 m6 <- glm(Diversity ~ TDS_mg.L + Season, data = invert.cs, family = "poisson")
 m7 <- glm(Diversity ~ pH + TDS_mg.L + Season, data = invert.cs, family = "poisson")
 m8 <- glm(Diversity ~ Dist_Closest_Wetland_m + Season, data = invert.cs, family = "poisson")
 m9 <- glm(Diversity ~ Season, data = invert.cs, family = "poisson")
+m10 <- glm(Diversity ~ PercentAg + Season + PercentLocalVeg_50m + pH + TDS_mg.L +
+             Dist_Closest_Wetland_m, data = invert.cs, family = "poisson")
 
-models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9)
+models <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
 model.sel(models)
 
 deviance(m1)
@@ -110,6 +107,9 @@ deviance(m6)
 deviance(m7)
 deviance(m8)
 deviance(m9)
+
+confint(m1)
+summary(m1)
 
 # plot parameter estimates ----
 # model averaged results (95% confidence set)

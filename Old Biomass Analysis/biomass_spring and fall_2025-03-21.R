@@ -1,7 +1,7 @@
 #------------------------------#
 #   Biomass (S and F) Analysis #
 #     Created 2025-03-21       #
-#    Modified 2025-03-21       #
+#    Modified 2025-03-27       #
 #------------------------------#
 
 # Load packages
@@ -15,11 +15,7 @@ library(ggbreak)
 library(patchwork)
 
 # Read in data
-invert <- read.csv("processed/Macroinverterbrate_Analysis_2025-03-06.csv")
 invert <- read.csv("Macroinverterbrate_Analysis_2025-03-06.csv")
-
-invert <- invert %>% 
-  mutate(LogBiomass = log(invert$Biomass + 0.001))
 
 invert$Season <- factor(invert$Season, levels = c("Spring", "Fall"))
 
@@ -62,36 +58,6 @@ invert.cs$PesticideInvert_ng.g <- scale(invert.cs$PesticideInvert_ng.g)
 spring <- subset(invert.cs, Season == "Spring")
 fall <- subset(invert.cs, Season == "Fall")
 
-
-### Agricultural Models ####
-m1 <- lm(LogBiomass ~ PercentAg, data = fall)
-
-### Vegetation Models ####
-m2 <- lm(LogBiomass ~ PercentBufferAroundWetland, data = fall)
-m3 <- lm(LogBiomass ~ PercentLocalVeg_50m, data = fall)
-m4 <- lm(LogBiomass ~ PercentBufferAroundWetland + PercentLocalVeg_50m, 
-         data = fall)
-
-### Water Quality Models #### 
-m5 <- lm(LogBiomass ~ pH, data = fall)
-m6 <- lm(LogBiomass ~ TDS_mg.L, data = fall)
-m7 <- lm(LogBiomass ~ pH + TDS_mg.L, data = fall)
-
-### Hydroperiod Model ####
-m8 <- lm(LogBiomass ~ Dist_Closest_Wetland_m, data = fall)
-
-### Null
-m9 <- lm(LogBiomass ~ 1, data = fall)
-
-# AIC MODEL SELECTION
-model_names <- paste0("m", 1:9)
-
-models <- mget(model_names)
-
-aictab(models, modnames = model_names)
-
-### Conclusion
-# No covariates had any significant effect for spring or fall only
 
 
 ### Raw Data for Biomass Coded by Season ----
@@ -187,3 +153,66 @@ ggplot(spring, aes(x = BareAg, y = Biomass, fill = BareAg, col = BareAg)) +
                                "Vegetated" = "darkolivegreen")) +
   scale_color_manual(values = c("Bare Agriculture" = "skyblue", 
                                 "Vegetated" = "darkolivegreen"))
+
+
+
+# low veg ag compared to high veg ag
+lowveg <- subset(invert, PercentLocalVeg_50m < 15)
+
+invert <- invert %>% 
+  mutate(lowveg = case_when(
+    PercentLocalVeg_50m < 25 & PercentAg >= 75 ~ "Low Vegetation Cover (< 25%)",
+    PercentLocalVeg_50m > 25 & PercentAg >= 75 ~ "High Vegetation Cover (> 25%)",
+    TRUE ~ NA_character_
+  ))
+
+
+ggplot(invert %>% filter(!is.na(lowveg)), aes(x = lowveg, y = Biomass, 
+                                              fill = lowveg, col = lowveg)) + 
+  geom_boxplot(alpha = 0.5, outlier.size = 3) +
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 21,
+                                    margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21,
+                                    margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 15),
+        legend.position = "none") +
+  scale_fill_manual(values = c("Low Vegetation Cover (< 25%)" = "skyblue", 
+                               "High Vegetation Cover (> 25%)" = "darkolivegreen")) +
+  scale_color_manual(values = c("Low Vegetation Cover (< 25%)" = "skyblue", 
+                                "High Vegetation Cover (> 25%)" = "darkolivegreen"))
+
+invert <- invert %>% 
+  mutate(lowveg = case_when(
+    PercentLocalVeg_50m < 25 & PercentAg >= 25 ~ "Low Vegetation Cover (< 25%)",
+    PercentLocalVeg_50m > 25 & PercentAg >= 25 ~ "High Vegetation Cover (> 25%)",
+    TRUE ~ NA_character_
+  ))
+
+
+ggplot(invert %>% filter(!is.na(lowveg)), aes(x = lowveg, y = Biomass, 
+                                              fill = lowveg, col = lowveg)) + 
+  geom_boxplot(alpha = 0.5, outlier.size = 3) +
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Macroinvertebrate Biomass (g)") +
+  theme(axis.title.x = element_text(size = 21,
+                                    margin = margin(t = 12)),
+        axis.title.y = element_text(size = 21,
+                                    margin = margin(r = 12)),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_text(size = 18),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 15),
+        legend.position = "none") +
+  scale_fill_manual(values = c("Low Vegetation Cover (< 25%)" = "skyblue", 
+                               "High Vegetation Cover (> 25%)" = "darkolivegreen")) +
+  scale_color_manual(values = c("Low Vegetation Cover (< 25%)" = "skyblue", 
+                                "High Vegetation Cover (> 25%)" = "darkolivegreen"))
+
+wilcox.test(invert$Biomass ~ invert$lowveg, data = na.omit(invert))
